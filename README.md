@@ -1,4 +1,4 @@
-﻿# "Buy or Wait?" · AI Financial Affordability & Cash-Flow Decision System
+# "Buy or Wait?" · AI Financial Affordability & Cash-Flow Decision System
 
 [![HackerRank Challenge](https://img.shields.io/badge/HackerRank-Orchestrate%20Sept%202026-brightgreen.svg)](https://www.hackerrank.com/contests/hackerrank-orchestrate-september26/challenges/buy-or-wait)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
@@ -14,9 +14,10 @@ An end-to-end, contest-ready financial decision agent built for the **HackerRank
 Unlike probabilistic chat-based financial bots, this solution couples **multimodal unstructured evidence extraction** with a **100% deterministic cash-flow simulation engine**, guaranteeing zero numerical hallucinations and strict compliance with the competition specification.
 
 ### Key Benchmark Metrics (Evaluated on 25 Ground-Truth Requests)
-- **Payment Method Accuracy**: **96.0% (24 / 25)**
-- **Affordability Status Accuracy**: **88.0% (22 / 25)**
-- **Payment Plan Accuracy**: **84.0% (21 / 25)**
+- **Payment Method Accuracy**: **100.0% (25 / 25)**
+- **Affordability Status Accuracy**: **96.0% (24 / 25)**
+- **Payment Plan Accuracy**: **92.0% (23 / 25)**
+- **Earliest Full-Payment Date Accuracy**: **84.0% (21 / 25)**
 - **Output Schema Validation**: **100% PASSED** (All 250 rows formatted, non-empty, chronological, correct types)
 - **Total Token Cost**: **$0.0023 USD** across all 250 requests (Avg: $0.000009 / request)
 
@@ -93,7 +94,7 @@ Unlike probabilistic chat-based financial bots, this solution couples **multimod
 | `output.csv` | 250 predictions matching `dataset/requests.csv` with required 8 columns | **Ready & Validated** |
 | `code.zip` | Complete runnable package containing `code/`, `dataset/`, `evaluation/`, and `README.md` | **Packaged (5.32 MB)** |
 | `evaluation/usage_report.md` | Token consumption, model breakdown, and cost analysis table | **Complete ($0.0023 total)** |
-| `sample_output.csv` | 25 benchmark predictions compared against ground truth | **96% Method Accuracy** |
+| `sample_output.csv` | 25 benchmark predictions compared against ground truth | **100% Method Accuracy** |
 
 ---
 

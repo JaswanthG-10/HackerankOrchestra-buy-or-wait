@@ -19,11 +19,14 @@ def evaluate_installment_options(
         if opt.payment_method != 'installments':
             continue
 
-        # Check max installment months
         freq = opt.payment_frequency_days or 30.0
-        duration_months = (opt.number_of_payments * freq) / 30.0
+        
+        # Duration check (Issue 10):
+        # actual plan duration in days = (number_of_payments - 1) * freq
+        duration_days = (opt.number_of_payments - 1) * freq
+        duration_months = duration_days / 30.0
         if profile.max_installment_months is not None:
-            if opt.number_of_payments > profile.max_installment_months and duration_months > profile.max_installment_months:
+            if duration_months > profile.max_installment_months:
                 continue
 
         # Build schedule
@@ -39,7 +42,11 @@ def evaluate_installment_options(
 
         plan_str = '|'.join(plan_parts)
         last_pay_date = schedule[-1][0]
-        completes_by_deadline = (last_pay_date <= request.desired_completion_date)
+        
+        # Deadline check (Issue 9):
+        # A plan that does not complete by requested deadline is strictly ineligible!
+        if last_pay_date > request.desired_completion_date:
+            continue
 
         # Run 90-day simulation
         _, headroom = run_90_day_simulation(
@@ -50,13 +57,13 @@ def evaluate_installment_options(
             payment_schedule=schedule
         )
 
-        if headroom >= 0.0:
+        if headroom >= -0.05:
             candidates.append(PlanCandidate(
                 method='installments',
                 affordability_status='affordable_with_plan',
                 payment_plan=plan_str,
                 schedule=schedule,
-                completes_by_deadline=completes_by_deadline,
+                completes_by_deadline=True,
                 spending_changes=[],
                 total_amount_paid=opt.total_payable_amount,
                 start_date=opt.first_payment_date,

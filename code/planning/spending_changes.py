@@ -1,3 +1,4 @@
+from itertools import combinations
 from typing import Dict, List, Optional, Set, Tuple
 from code.models import UserProfile, FinancialEvent, RequestItem, PlanCandidate
 from code.finance.forecast import run_90_day_simulation
@@ -13,7 +14,6 @@ def evaluate_spending_changes(
     if 'full_payment' not in profile.payment_methods_user_will_consider:
         return None
 
-    # Identify eligible flexible events from history
     stop_cats = set(profile.expense_categories_user_is_willing_to_stop)
     reduce_cats = set(profile.expense_categories_user_is_willing_to_reduce)
 
@@ -24,11 +24,9 @@ def evaluate_spending_changes(
 
     for e in reversed(history):
         if e.direction == 'debit':
-            # Check stoppable
             if e.category in stop_cats and e.flexibility in ['stoppable', 'reducible_or_stoppable']:
                 if e.description not in eligible_stops:
                     eligible_stops[e.description] = e
-            # Check reducible
             if e.category in reduce_cats and e.flexibility in ['reducible', 'reducible_or_stoppable']:
                 if e.description not in eligible_reduces and e.minimum_allowed_amount is not None:
                     eligible_reduces[e.description] = e
@@ -41,28 +39,53 @@ def evaluate_spending_changes(
 
     # 1 change: single stop
     for s in stop_list:
-        candidate_combos.append(({s.event_id}, {}, [f'stop:{s.event_id}']))
+        candidate_combos.append(({s.event_id}, {}, [s], []))
 
     # 1 change: single reduce
     for r in reduce_list:
-        amt_str = format_amount(r.minimum_allowed_amount)
-        candidate_combos.append((set(), {r.event_id: r.minimum_allowed_amount}, [f'reduce_to:{r.event_id}:{amt_str}']))
+        candidate_combos.append((set(), {r.event_id: r.minimum_allowed_amount}, [], [r]))
 
     # 2 changes: stop + reduce (different events)
     for s in stop_list:
         for r in reduce_list:
             if s.event_id != r.event_id:
-                amt_str = format_amount(r.minimum_allowed_amount)
-                candidate_combos.append(({s.event_id}, {r.event_id: r.minimum_allowed_amount}, [f'stop:{s.event_id}', f'reduce_to:{r.event_id}:{amt_str}']))
+                candidate_combos.append(({s.event_id}, {r.event_id: r.minimum_allowed_amount}, [s], [r]))
 
     # 2 changes: two stops
-    for i in range(len(stop_list)):
-        for j in range(i + 1, len(stop_list)):
-            candidate_combos.append(({stop_list[i].event_id, stop_list[j].event_id}, {}, [f'stop:{stop_list[i].event_id}', f'stop:{stop_list[j].event_id}']))
+    for s1, s2 in combinations(stop_list, 2):
+        candidate_combos.append(({s1.event_id, s2.event_id}, {}, [s1, s2], []))
 
-    # Test each combination
+    # 2 changes: two reduces
+    for r1, r2 in combinations(reduce_list, 2):
+        candidate_combos.append((set(), {r1.event_id: r1.minimum_allowed_amount, r2.event_id: r2.minimum_allowed_amount}, [], [r1, r2]))
+
+    # 3 changes: 3 stops
+    for s1, s2, s3 in combinations(stop_list, 3):
+        candidate_combos.append(({s1.event_id, s2.event_id, s3.event_id}, {}, [s1, s2, s3], []))
+
+    # 3 changes: 2 stops + 1 reduce
+    for s1, s2 in combinations(stop_list, 2):
+        for r in reduce_list:
+            if r.event_id not in [s1.event_id, s2.event_id]:
+                candidate_combos.append(({s1.event_id, s2.event_id}, {r.event_id: r.minimum_allowed_amount}, [s1, s2], [r]))
+
+    # 3 changes: 1 stop + 2 reduces
+    for s in stop_list:
+        for r1, r2 in combinations(reduce_list, 2):
+            if s.event_id not in [r1.event_id, r2.event_id]:
+                candidate_combos.append(({s.event_id}, {r1.event_id: r1.minimum_allowed_amount, r2.event_id: r2.minimum_allowed_amount}, [s], [r1, r2]))
+
+    # 3 changes: 3 reduces
+    for r1, r2, r3 in combinations(reduce_list, 3):
+        candidate_combos.append((set(), {r.event_id: r.minimum_allowed_amount for r in [r1, r2, r3]}, [], [r1, r2, r3]))
+
     full_schedule = [(request.request_date, request.requested_amount)]
-    for stop_ids, reduce_map, change_strings in candidate_combos:
+    
+    # Sort combos by total changes count (prefer 1 change, then 2, then 3)
+    candidate_combos.sort(key=lambda c: len(c[2]) + len(c[3]))
+
+    for stop_ids, reduce_map, s_objs, r_objs in candidate_combos:
+        # First test if combo works with maximum reduction
         _, headroom = run_90_day_simulation(
             profile=profile,
             events=events,
@@ -72,7 +95,49 @@ def evaluate_spending_changes(
             reduce_event_map=reduce_map,
             payment_schedule=full_schedule
         )
-        if headroom >= 0.0:
+        if headroom >= -0.05:
+            # Issue 14: Find minimum necessary reduction!
+            # If there are reduced items and headroom > 0, we can soften the reduction
+            final_reduce_map = dict(reduce_map)
+            for r in r_objs:
+                min_amt = r.minimum_allowed_amount
+                max_amt = r.amount
+                # Binary search for the largest new_amount (smallest reduction) where headroom >= 0
+                low = min_amt
+                high = max_amt
+                best_amt = min_amt
+                
+                # If headroom allows, try higher amounts
+                for step in range(12):
+                    mid = (low + high) / 2.0
+                    test_map = dict(final_reduce_map)
+                    test_map[r.event_id] = round(mid, 2)
+                    _, test_hd = run_90_day_simulation(
+                        profile=profile,
+                        events=events,
+                        resolved_info=resolved_info,
+                        request_date=request.request_date,
+                        stop_event_ids=stop_ids,
+                        reduce_event_map=test_map,
+                        payment_schedule=full_schedule
+                    )
+                    if test_hd >= -0.05:
+                        best_amt = round(mid, 2)
+                        low = mid # try higher (smaller reduction)
+                    else:
+                        high = mid # must reduce more
+                        
+                final_reduce_map[r.event_id] = best_amt
+
+            # Build formatted change strings
+            change_strings = []
+            for s in s_objs:
+                change_strings.append(f'stop:{s.event_id}')
+            for r in r_objs:
+                amt_val = final_reduce_map[r.event_id]
+                amt_str = format_amount(amt_val)
+                change_strings.append(f'reduce_to:{r.event_id}:{amt_str}')
+
             p_str = format_amount(request.requested_amount)
             return PlanCandidate(
                 method='full_payment',

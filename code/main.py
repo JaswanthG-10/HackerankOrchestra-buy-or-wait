@@ -21,7 +21,8 @@ from code.loader import (
     load_image_cache,
     load_financial_events,
     load_payment_options,
-    load_requests
+    load_requests,
+    load_message_cache
 )
 from code.evidence.message_parser import get_message_facts
 from code.finance.event_resolver import resolve_user_events
@@ -197,15 +198,7 @@ def main():
     all_events = load_financial_events(profiles, rates, img_cache)
     all_options = load_payment_options()
     requests_list = load_requests(use_samples=use_samples)
-    msg_facts = get_message_facts()
-
-    user_messages = {}
-    for m in msg_facts.values():
-        u = m.get('user_id')
-        if u:
-            if u not in user_messages:
-                user_messages[u] = []
-            user_messages[u].append(m)
+    user_messages = load_message_cache()
 
     results = []
     for req in requests_list:

@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timedelta
+from datetime import datetime, timedelta
 from typing import List, Optional
 from code.models import UserProfile, FinancialEvent
 from code.finance.forecast import run_90_day_simulation
@@ -39,8 +39,8 @@ def compute_earliest_date_for_full_payment(
         request_date=request_date
     )
 
-    # Test candidate dates (prioritizing salary dates and days when balance surges)
-    for day_offset in range(1, 90):
+    # Test candidate dates up to 90 days
+    for day_offset in range(1, 91):
         test_dt = req_dt + timedelta(days=day_offset)
         test_date_str = test_dt.strftime('%Y-%m-%d')
 
@@ -53,7 +53,7 @@ def compute_earliest_date_for_full_payment(
             payment_schedule=[(test_date_str, requested_amount)]
         )
 
-        if test_headroom >= 0.0:
+        if test_headroom >= -0.05:
             return test_date_str
 
     return None

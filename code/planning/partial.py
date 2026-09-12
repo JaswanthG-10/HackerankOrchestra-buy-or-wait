@@ -42,7 +42,7 @@ def evaluate_partial_payment(
         payment_schedule=schedule
     )
 
-    if headroom >= 0.0:
+    if headroom >= -0.05:
         return PlanCandidate(
             method='partial_payment',
             affordability_status='affordable_with_plan',

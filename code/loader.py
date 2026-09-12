@@ -55,7 +55,6 @@ def load_exchange_rates() -> Dict[Tuple[str, str, str], float]:
     return rates
 
 def load_image_cache() -> Dict[str, dict]:
-    # Maps event_id -> dict with amount, currency, etc.
     event_image_map = {}
     if os.path.exists(IMAGE_CACHE_PATH):
         try:
@@ -70,7 +69,6 @@ def load_image_cache() -> Dict[str, dict]:
     return event_image_map
 
 def load_message_cache() -> Dict[str, list]:
-    # Maps user_id -> list of message fact dicts
     user_msg_map = {}
     if os.path.exists(MESSAGE_CACHE_PATH):
         try:
@@ -93,6 +91,23 @@ def load_financial_events(
     df = pd.read_csv(EVENTS_PATH)
     user_events = {}
 
+    # Strict Image Evidence Validation upfront
+    blank_mask = df['amount'].isna()
+    total_blank = blank_mask.sum()
+    resolved_count = 0
+    unresolved_count = 0
+    
+    for _, r in df[blank_mask].iterrows():
+        ev_id = str(r['event_id'])
+        if ev_id in image_cache and image_cache[ev_id].get('amount') and float(image_cache[ev_id]['amount']) > 0:
+            resolved_count += 1
+        else:
+            unresolved_count += 1
+
+    print(f'Image Evidence Validation: {resolved_count}/{total_blank} resolved {unresolved_count} unresolved')
+    if unresolved_count > 0:
+        raise ValueError(f'Image Evidence Validation FAILED: {unresolved_count} blank event amounts could not be resolved from cache!')
+
     for _, r in df.iterrows():
         u_id = str(r['user_id'])
         ev_id = str(r['event_id'])
@@ -101,13 +116,13 @@ def load_financial_events(
         settle_date = str(r['settlement_date'])
         ev_date = str(r['event_date'])
 
-        # Resolve blank amount from image cache if needed
+        # Resolve blank amount from image cache
         raw_amt = r['amount']
         if pd.isna(raw_amt):
-            if ev_id in image_cache:
+            if ev_id in image_cache and image_cache[ev_id].get('amount'):
                 raw_amt = float(image_cache[ev_id]['amount'])
             else:
-                raw_amt = 0.0
+                raise ValueError(f'Mandatory event amount missing for {ev_id} and not resolved in image cache!')
         else:
             raw_amt = float(raw_amt)
 
@@ -118,7 +133,6 @@ def load_financial_events(
             if rate_key in rates:
                 amt = raw_amt * rates[rate_key]
 
-        # Minimum allowed amount for reducible items
         min_amt = None
         if pd.notnull(r['minimum_allowed_amount']):
             min_raw = float(r['minimum_allowed_amount'])
