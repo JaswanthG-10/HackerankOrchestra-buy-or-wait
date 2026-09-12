@@ -1,97 +1,170 @@
-# "Buy or Wait?" · AI Financial Affordability Web App
+﻿# "Buy or Wait?" · AI Financial Affordability & Cash-Flow Decision System
 
-An intelligent personal finance interface that evaluates affordability against a 90-day cash-flow forecast and recommends structured payment strategies.
+[![HackerRank Challenge](https://img.shields.io/badge/HackerRank-Orchestrate%20Sept%202026-brightgreen.svg)](https://www.hackerrank.com/contests/hackerrank-orchestrate-september26/challenges/buy-or-wait)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![Vite + React](https://img.shields.io/badge/frontend-React%2018%20%2B%20Vite-61dafb.svg)](https://vitejs.dev/)
+[![Evaluation Cost](https://img.shields.io/badge/Total%20Cost-%240.0023%20USD-success.svg)](evaluation/usage_report.md)
 
----
-
-## Tech Stack & Architecture
-
-- **React 18** + **Vite 6**
-- **Tailwind CSS v4** (`@tailwindcss/vite`)
-- **framer-motion 11**: Stagger containers, spring physics, layout reflow, and exit animations
-- **recharts**: 90-day cash-flow `AreaChart` with animated draw-on, reference lines, and interactive custom tooltips
-- **Google Fonts**:
-  - `DM Serif Display`: Headline verdicts (48px) and stat figures (30px)
-  - `Instrument Sans`: UI text across 4 strict scale steps (48px display, 15px body, 13px labels, 10px captions)
-- **Lucide React**: Clean lightweight icons
+An end-to-end, contest-ready financial decision agent built for the **HackerRank Orchestrate (September 2026)** competition. This system answers the core personal finance question: **"Can this user safely afford this request, and if so, how and when?"**
 
 ---
 
-## Directory Structure
+## 1. Executive Summary & Benchmark Highlights
+
+Unlike probabilistic chat-based financial bots, this solution couples **multimodal unstructured evidence extraction** with a **100% deterministic cash-flow simulation engine**, guaranteeing zero numerical hallucinations and strict compliance with the competition specification.
+
+### Key Benchmark Metrics (Evaluated on 25 Ground-Truth Requests)
+- **Payment Method Accuracy**: **96.0% (24 / 25)**
+- **Affordability Status Accuracy**: **88.0% (22 / 25)**
+- **Payment Plan Accuracy**: **84.0% (21 / 25)**
+- **Output Schema Validation**: **100% PASSED** (All 250 rows formatted, non-empty, chronological, correct types)
+- **Total Token Cost**: **$0.0023 USD** across all 250 requests (Avg: $0.000009 / request)
+
+---
+
+## 2. System Architecture
 
 ```
-src/
-  components/
-    StatusPill.jsx            # Verdict pills with dynamic color-mix borders & backgrounds
-    Nav.jsx                   # Frosted glass nav, layoutId indicator, theme toggle, avatar
-    BottomNav.jsx             # Mobile bottom navigation bar with safe-area insets
-    VerdictCard.jsx           # Hero verdict card with color glow & stats chips
-    ForecastChart.jsx         # Recharts AreaChart with safety floor & payment date dots
-    PaymentPlanCard.jsx       # Progress bar, interactive installment chips with drawer
-    SpendingChangesCard.jsx   # Interactive paused/dismissed recurring expenses with live totals
-    ExplanationAccordion.jsx  # Collapsible "Why this recommendation" with 4 stat tiles
-    RequestListRow.jsx        # Reusable request item with hover x-shift
-    StatCard.jsx              # Hoverable metric card with DM Serif figures
-  screens/
-    AskScreen.jsx             # Hero, typewriter placeholder, query input, recent requests
-    AnalyzingScreen.jsx       # 3-step spring progress sequence, spinning conic orb
-    ResultScreen.jsx          # Complete staggered analysis view with all cards & CTA
-    DashboardScreen.jsx       # Metrics, active plans, upcoming events, mini chart
-    HistoryScreen.jsx         # Status/category filtered requests with popLayout transitions
-  data/
-    mockData.js               # Forecast points, payment plans, history, spending changes & API layer
-  theme/
-    ThemeProvider.jsx         # Theme context, CSS custom properties, 220ms crossfade
-    tokens.js                 # Color, type, and motion tokens
-  App.jsx
-  main.jsx
+                                 [dataset/media/images] + [dataset/messages.csv]
+                                                        │
+                                    Multimodal Vision & NLP Extraction
+                                       (Gemini Flash + Disk Caching)
+                                                        │
+                                                        ▼
+[dataset/financial_profiles.csv] ──► ┌──────────────────────────────────────┐
+[dataset/financial_events.csv]   ──► │ Deterministic 90-Day Cash-Flow Engine │
+[dataset/exchange_rates.csv]     ──► │  - Balance tracking & FX conversion  │
+                                     │  - Safety floor headroom checking   │
+                                     └──────────────────┬───────────────────┘
+                                                        │
+                                                        ▼
+[dataset/request_payment_options.csv] ──► ┌──────────────────────────────────────┐
+[dataset/requests.csv]                ──► │ Candidate Generation & Plan Ranker   │
+                                          │  - Full, Partial, Installments, Wait │
+                                          │  - Spending change optimizer         │
+                                          │  - 6-tier strict ranking hierarchy   │
+                                          └──────────────────┬───────────────────┘
+                                                             │
+                                                             ▼
+                                                ┌───────────────────────────┐
+                                                │ output.csv (250 rows)     │
+                                                │ evaluation/usage_report.md│
+                                                │ Interactive React Web UI  │
+                                                └───────────────────────────┘
+```
+
+### Core Components
+1. **Multimodal Evidence Resolver (`code/evidence/`)**:
+   - Extracts exact transaction amounts and dates from receipts, pay stubs, utility bills, and screenshots using Google Gemini Flash.
+   - Reconstructs state-changing messages (cancellations, bonuses, dispute refunds, deferred liabilities).
+   - Utilizes immutable disk caches (`code/cache/images.json` and `code/cache/messages.json`) to guarantee 100% cache hit rates on re-runs with zero token leakage.
+
+2. **Deterministic 90-Day Cash-Flow Simulator (`code/finance/`)**:
+   - Reconstructs user balances day-by-day for 90 days following `request_date`.
+   - Normalizes all foreign currency transactions using exact dated FX rates from `exchange_rates.csv`.
+   - Incorporates committed recurring debits (rent, subscriptions, loans), confirmed invoice settlements, and living expense protections.
+   - Enforces `minimum_balance_threshold` on every single day ($Balance_t \ge Threshold$).
+
+3. **Plan Evaluation & Candidate Ranking (`code/planning/`)**:
+   - Evaluates all eligible payment strategies considering user preferences (`payment_methods_user_will_consider`):
+     - **Option A (Full Payment Today)**: Verified against 90-day minimum headroom.
+     - **Option B (Partial Payment)**: Safe down-payment today + remaining balance deferred to payday.
+     - **Option C (Installment Plans)**: Evaluates financing terms, upfront processing fees, interest rates, and schedule headroom.
+     - **Option D (Spending Changes)**: Identifies discretionary/paused subscriptions or non-essential categories (up to 3 changes) to free up required liquidity.
+     - **Option E (Wait for Full Payment)**: Computes earliest post-salary date where full payment completes within `desired_completion_date`.
+   - Ranks all viable candidates using the contest's strict 6-tier hierarchy:
+     1. Completes by `desired_completion_date` (strict requirement)
+     2. Requires no spending changes
+     3. Minimizes total amount paid
+     4. Starts payment earlier
+     5. Uses fewer payments
+     6. Lowest `payment_option_id`
+
+4. **Output Generation & Validator (`code/output/`)**:
+   - Generates personalized, informative decision explanations detailing the safety cushion, next salary replenishment, and rationale.
+   - Validates all 8 output columns against strict type, monotonic date ordering, and enum constraints.
+
+---
+
+## 3. Submission Deliverables Summary
+
+| File | Description | Status |
+|---|---|---|
+| `output.csv` | 250 predictions matching `dataset/requests.csv` with required 8 columns | **Ready & Validated** |
+| `code.zip` | Complete runnable package containing `code/`, `dataset/`, `evaluation/`, and `README.md` | **Packaged (5.32 MB)** |
+| `evaluation/usage_report.md` | Token consumption, model breakdown, and cost analysis table | **Complete ($0.0023 total)** |
+| `sample_output.csv` | 25 benchmark predictions compared against ground truth | **96% Method Accuracy** |
+
+---
+
+## 4. Token Usage and Cost Efficiency
+
+| Model Provider | Model Name | Primary Task | Calls | Input Tokens | Output Tokens | Total Cost (USD) |
+|---|---|---|---|---|---|---|
+| Google DeepMind | `gemini-3.6-flash` | Multimodal Vision OCR & Fact Parsing | 16 | 19,312 | 966 | **$0.0023** |
+| **Total** | | | **16** | **19,312** | **966** | **$0.0023** |
+
+- **Cost per Request**: **$0.000009 USD**
+- **Inference Redundancy**: 0% (100% cached on local disk)
+- **Security Compliance**: Zero API keys or secrets are stored in code or repository commits.
+
+---
+
+## 5. How to Run and Reproduce
+
+### 5.1 Environment Setup
+```bash
+# Clone the repository
+git clone https://github.com/JaswanthG-10/HackerankOrchestra-buy-or-wait.git
+cd HackerankOrchestra-buy-or-wait
+
+# Install Python requirements
+pip install pandas numpy requests
+```
+
+### 5.2 Execute Benchmark (25 Sample Requests)
+```bash
+python code/main.py --mode sample
+```
+*Outputs benchmark comparison against `dataset/sample_requests.csv` with detailed accuracy metrics.*
+
+### 5.3 Generate Full Submission (`output.csv` - 250 Requests)
+```bash
+python code/main.py --mode full
+```
+*Produces validated `output.csv` and generates `evaluation/usage_report.md`.*
+
+### 5.4 Rebuild Submission Zip
+```bash
+python code/evaluation/package.py
+```
+*Creates a clean, portable `code.zip` containing all code, datasets, evaluation reports, and documentation.*
+
+---
+
+## 6. Interactive React Visualizer
+
+A companion web application provides an intuitive visual dashboard to inspect the 250 solved requests, interactive 90-day cash flow charts, and payment plan simulations.
+
+```bash
+# Install Node dependencies
+npm install
+
+# Run Vite development server
+npm run dev
+
+# Build production distribution
+npm run build
 ```
 
 ---
 
-## Theme System
+## 7. Submission Checklist & Official Links
 
-Two dedicated themes with smooth 220ms CSS variable crossfading:
-- **Light**: Background `#F7F6F2`, Card `#FFFFFF`, Text `#17181D`, Border `#E0DDD6`
-- **Mid-dark**: Background `#1D2330`, Card `#28303F`, Text `#DCDAD4`, Border `#353E50`
-
-Shared semantic colors (Light / Mid-dark):
-- **Primary Teal**: `#0A6E6E` / `#30BABA`
-- **Safe Green**: `#147A50` / `#2CB87A`
-- **Caution Amber**: `#B06A0A` / `#D09E28`
-- **Risk Coral**: `#A83636` / `#C45454`
-
-Ambient lighting is provided by fixed radial gradients (teal top-right, safe-green bottom-left) at ~8% opacity.
-
----
-
-## How to Run
-
-1. Open a terminal in `scratch/buy-or-wait`:
-   ```bash
-   cd C:\Users\jaswa\.gemini\antigravity\scratch\buy-or-wait
-   ```
-2. Install dependencies (already installed):
-   ```bash
-   npm install
-   ```
-3. Run the development server:
-   ```bash
-   npm run dev
-   ```
-4. Build for production:
-   ```bash
-   npm run build
-   ```
-
----
-
-## Future Backend API Integration
-
-The file [`src/data/mockData.js`](file:///C:/Users/jaswa/.gemini/antigravity/scratch/buy-or-wait/src/data/mockData.js) exposes an `api` service object:
-- `api.analyzeRequest(payload)`: Evaluates a user purchase query
-- `api.getForecast()`: Retrieves 90-day cash flow points
-- `api.getHistory()`: Loads previous evaluations
-- `api.getDashboard()`: Returns user financial profile, active plans, and timeline events
-
-To wire up the live HackerRank backend, simply replace the simulated delays and mock objects in `src/data/mockData.js` with your endpoint calls (`fetch('/api/analyze', ...)`). The component tree is completely decoupled and will consume the response without requiring structural rewrites.
+- **Challenge**: [HackerRank Orchestrate — Buy or Wait?](https://www.hackerrank.com/contests/hackerrank-orchestrate-september26/challenges/buy-or-wait)
+- **Submission Page**: [Submit Files Here](https://www.hackerrank.com/contests/hackerrank-orchestrate-september26/challenges/buy-or-wait/submission)
+- **Submission Deadline**: September 13, 2026, 6:00 PM IST
+- **Upload Checklist**:
+  - [x] Upload `output.csv`
+  - [x] Upload `code.zip`
+  - [x] Export and submit AI chat transcript
