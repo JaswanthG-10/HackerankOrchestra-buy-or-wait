@@ -23,6 +23,7 @@ USAGE_REPORT_PATH = REPO_ROOT / 'evaluation' / 'usage_report.md'
 # Financial constants
 FORECAST_DAYS = 90
 MAX_SPENDING_CHANGES = 3
+SAFE_TOLERANCE = -0.05
 
 # Challenge info
 DEADLINE_ISO = '2026-09-13T18:00:00+05:30'

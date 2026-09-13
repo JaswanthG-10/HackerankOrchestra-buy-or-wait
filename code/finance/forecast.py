@@ -178,7 +178,7 @@ def build_forecast_timeline(
             for d in range(days_until_payday):
                 d_str = (req_dt + timedelta(days=d)).strftime("%Y-%m-%d")
                 for entry in timeline.get(d_str, []):
-                    if entry[1] == 'debit':
+                    if entry[1] == 'debit' and not entry[2].startswith("Pending debit reserve:"):
                         found_cat = None
                         for ob in recurring_obs:
                             if ob.description == entry[2]:
@@ -186,14 +186,14 @@ def build_forecast_timeline(
                                 break
                         if not found_cat:
                             for e in clean_events:
-                                if e.description == entry[2] or f"Pending debit reserve: {e.description}" == entry[2]:
+                                if e.description == entry[2]:
                                     found_cat = e.category
                                     break
                         if found_cat:
                             debits_before.add(found_cat)
             
             for e in clean_events:
-                if request_date <= e.settlement_date <= next_sal_date_str and e.direction == 'debit':
+                if request_date <= e.settlement_date <= next_sal_date_str and e.direction == 'debit' and e.status != 'pending':
                     debits_before.add(e.category)
                                 
             # For living categories that have no debit scheduled before payday:

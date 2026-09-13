@@ -2,6 +2,11 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from code.models import UserProfile, FinancialEvent
 from code.finance.forecast import run_90_day_simulation
+from code.config import SAFE_TOLERANCE
+
+def is_financially_safe(min_headroom: float) -> bool:
+    """Canonical definition of financial safety: min_headroom >= SAFE_TOLERANCE (-0.05)."""
+    return min_headroom >= SAFE_TOLERANCE
 
 def compute_amount_safe_to_pay(
     profile: UserProfile,
@@ -25,26 +30,17 @@ def compute_earliest_date_for_full_payment(
     resolved_info: dict,
     request_date: str,
     requested_amount: float,
-    amount_safe_to_pay: float
+    amount_safe_to_pay: Optional[float] = None
 ) -> Optional[str]:
-    # If safe today, earliest date is today
-    if amount_safe_to_pay >= requested_amount:
-        return request_date
-
+    """
+    Finds the earliest date (from request_date up to request_date + 90 days) where
+    paying requested_amount in full maintains minimum balance across the 90-day simulation.
+    """
     req_dt = datetime.strptime(request_date, '%Y-%m-%d')
-    trajectory, _ = run_90_day_simulation(
-        profile=profile,
-        events=events,
-        resolved_info=resolved_info,
-        request_date=request_date
-    )
-
-    # Test candidate dates up to 90 days
-    for day_offset in range(1, 91):
+    for day_offset in range(0, 91):
         test_dt = req_dt + timedelta(days=day_offset)
         test_date_str = test_dt.strftime('%Y-%m-%d')
 
-        # Run simulation with full payment on test_date_str
         _, test_headroom = run_90_day_simulation(
             profile=profile,
             events=events,
@@ -53,8 +49,7 @@ def compute_earliest_date_for_full_payment(
             payment_schedule=[(test_date_str, requested_amount)]
         )
 
-        min_headroom_threshold = max(0.0, 0.10 * profile.minimum_balance_to_keep)
-        if test_headroom >= min_headroom_threshold:
+        if is_financially_safe(test_headroom):
             return test_date_str
 
     return None

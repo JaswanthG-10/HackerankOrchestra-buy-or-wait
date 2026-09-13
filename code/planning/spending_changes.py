@@ -86,14 +86,12 @@ def evaluate_spending_changes(
     for r1, r2, r3 in combinations(reduce_list, 3):
         candidate_combos.append((set(), {r.event_id: r.minimum_allowed_amount for r in [r1, r2, r3]}, [], [r1, r2, r3]))
 
+    from code.finance.safety import is_financially_safe
+
     req_dt = datetime.strptime(request.request_date, '%Y-%m-%d')
     end_dt = datetime.strptime(request.desired_completion_date, '%Y-%m-%d')
-    cand_dates = [request.request_date]
     max_days = min(90, (end_dt - req_dt).days)
-    for d in range(1, max_days + 1):
-        cdt = req_dt + timedelta(days=d)
-        if cdt.day in [1, 15]:
-            cand_dates.append(cdt.strftime('%Y-%m-%d'))
+    cand_dates = [request.request_date] + [(req_dt + timedelta(days=d)).strftime('%Y-%m-%d') for d in range(1, max_days + 1)]
 
     # Sort combos by total changes count (prefer 1 change, then 2, then 3)
     candidate_combos.sort(key=lambda c: len(c[2]) + len(c[3]))
@@ -111,7 +109,7 @@ def evaluate_spending_changes(
                 reduce_event_map=reduce_map,
                 payment_schedule=full_schedule
             )
-            if headroom >= -0.05:
+            if is_financially_safe(headroom):
                 # Issue 14: Find minimum necessary reduction!
                 final_reduce_map = dict(reduce_map)
                 for r in r_objs:
@@ -134,7 +132,7 @@ def evaluate_spending_changes(
                             reduce_event_map=test_map,
                             payment_schedule=full_schedule
                         )
-                        if test_hd >= -0.05:
+                        if is_financially_safe(test_hd):
                             best_amt = round(mid, 2)
                             low = mid
                         else:

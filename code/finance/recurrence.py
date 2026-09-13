@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -19,16 +20,21 @@ class RecurringObligation:
     minimum_allowed_amount: Optional[float] = None
     event_id: Optional[str] = None
 
+def normalize_description(desc: str) -> str:
+    s = str(desc).lower().strip()
+    s = re.sub(r'#?\b[0-9a-fA-F\-]{4,}\b', '', s)
+    s = re.sub(r'\b\d+\b', '', s)
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s
+
 def detect_recurring_obligations(
     events: List[FinancialEvent],
     request_date: str
 ) -> List[RecurringObligation]:
     """
     Infers recurring debit obligations from historical settled events before request_date.
-    Uses interval consistency:
-    - 6 to 8 days: weekly
-    - 13 to 16 days: bi-weekly
-    - 27 to 33 days: monthly
+    Uses normalized identity grouping and interval consistency.
+    Filters out inactive recurrences older than 60 days.
     """
     req_dt = datetime.strptime(request_date, "%Y-%m-%d")
     history = [
@@ -36,18 +42,26 @@ def detect_recurring_obligations(
         if e.event_date <= request_date and e.status == "settled" and e.direction == "debit"
     ]
     
-    # Group by description
-    desc_groups: Dict[str, List[FinancialEvent]] = {}
+    # Group by normalized identity
+    norm_groups: Dict[Tuple[str, str], List[FinancialEvent]] = {}
     for e in history:
-        desc_groups.setdefault(e.description, []).append(e)
+        key = (normalize_description(e.description), e.category)
+        norm_groups.setdefault(key, []).append(e)
         
     recurring: List[RecurringObligation] = []
     
-    for desc, evs in desc_groups.items():
+    for (norm_desc, cat), evs in norm_groups.items():
         if len(evs) < 2:
             continue
             
         evs.sort(key=lambda x: x.event_date)
+        last_ev = evs[-1]
+        
+        # Recency check: must have occurred within last 65 days
+        days_since_last = (req_dt - datetime.strptime(last_ev.event_date, "%Y-%m-%d")).days
+        if days_since_last > 65:
+            continue
+            
         dates = [datetime.strptime(e.event_date, "%Y-%m-%d") for e in evs]
         deltas = [(dates[i] - dates[i-1]).days for i in range(1, len(dates))]
         
@@ -55,15 +69,12 @@ def detect_recurring_obligations(
             continue
             
         med_delta = float(np.median(deltas))
-        last_ev = evs[-1]
         
-        # Use last settled amount as the current recurring rate
-        # If amount varied widely (e.g. utilities), median of recent 3
+        # Use last settled amount as current recurring rate or median of recent 3
         recent_evs = evs[-3:] if len(evs) >= 3 else evs
         recent_amts = [e.amount for e in recent_evs]
         amount = float(np.median(recent_amts))
         
-        # Determine frequency
         frequency = None
         dom = None
         dow = None
@@ -79,7 +90,6 @@ def detect_recurring_obligations(
             days = [d.day for d in dates]
             dom = Counter(days).most_common(1)[0][0]
         else:
-            # Check if all events share the same day of month (+/- 1 day)
             days = [d.day for d in dates]
             most_common_day, count = Counter(days).most_common(1)[0]
             if count >= 2 and len(evs) >= 2 and (dates[-1] - dates[0]).days >= 45:
@@ -88,7 +98,7 @@ def detect_recurring_obligations(
                 
         if frequency:
             recurring.append(RecurringObligation(
-                description=desc,
+                description=last_ev.description,
                 category=last_ev.category,
                 amount=amount,
                 frequency=frequency,
