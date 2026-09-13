@@ -17,6 +17,12 @@ def evaluate_spending_changes(
     stop_cats = set(profile.expense_categories_user_is_willing_to_stop)
     reduce_cats = set(profile.expense_categories_user_is_willing_to_reduce)
 
+    # Detect recurring obligations to ensure candidates are genuinely recurring
+    from code.finance.recurrence import detect_recurring_obligations
+    rec_obs = detect_recurring_obligations(events, request.request_date)
+    rec_descs = set(r.description for r in rec_obs)
+    rec_event_ids = set(r.event_id for r in rec_obs if r.event_id)
+
     # Find the most recent event for each recurring flexible description
     history = [e for e in events if e.event_date <= request.request_date and e.status == 'settled']
     eligible_stops = {}

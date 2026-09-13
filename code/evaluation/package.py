@@ -61,7 +61,7 @@ def create_submission_zip(repo_root: Path = None, output_zip_path: Path = None) 
     # Verification Gate (Priority 15)
     with zipfile.ZipFile(output_zip_path, 'r') as check_zip:
         namelist = check_zip.namelist()
-        required_in_zip = ['code/main.py', 'README.md', 'requirements.txt']
+        required_in_zip = ['code/main.py', 'README.md', 'requirements.txt', 'evaluation/usage_report.md']
         forbidden_in_zip = ['.env', '.env.local', 'node_modules', '__pycache__', 'secret']
         
         for req in required_in_zip:

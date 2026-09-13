@@ -17,6 +17,7 @@ Unlike probabilistic chat-based financial bots, this solution couples **multimod
 - **Payment Method Accuracy**: **100.0% (25 / 25)**
 - **Affordability Status Accuracy**: **96.0% (24 / 25)**
 - **Payment Plan Accuracy**: **92.0% (23 / 25)**
+- **Spending Changes Accuracy**: **92.0% (23 / 25)**
 - **Earliest Full-Payment Date Accuracy**: **84.0% (21 / 25)**
 - **Output Schema Validation**: **100% PASSED** (All 250 rows formatted, non-empty, chronological, correct types)
 - **Total Token Cost**: **$0.0023 USD** across all 250 requests (Avg: $0.000009 / request)

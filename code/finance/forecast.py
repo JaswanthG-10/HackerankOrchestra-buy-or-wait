@@ -58,7 +58,7 @@ def build_forecast_timeline(
             
     # 6. Add forward salary schedule
     next_sal_date_str = None
-    if not salary_info.get("salary_ended"):
+    if not salary_info.get("salary_ended") and not salary_info.get("is_gig_worker"):
         sal_day = salary_info["perm_sal_day"]
         base_sal_amt = salary_info["perm_sal_amount"]
         next_sal_amt = salary_info.get("next_sal_amount")
@@ -156,6 +156,14 @@ def build_forecast_timeline(
                 days_since = (cur_dt - last_dt).days
                 if days_since > 0 and days_since % 14 == 0:
                     timeline.setdefault(cur_str, []).append((amt, "debit", ob.description))
+        elif ob.frequency == "every_21_days" and ob.last_date:
+            last_dt = datetime.strptime(ob.last_date, "%Y-%m-%d")
+            for d in range(91):
+                cur_dt = req_dt + timedelta(days=d)
+                cur_str = cur_dt.strftime("%Y-%m-%d")
+                days_since = (cur_dt - last_dt).days
+                if days_since > 0 and days_since % 21 == 0:
+                    timeline.setdefault(cur_str, []).append((amt, "debit", ob.description))
 
     # Pre-payday living expenses check:
     # Ensure pre-payday balance accounts for normal active living expenses before first payday
@@ -184,10 +192,15 @@ def build_forecast_timeline(
                                     break
                         if found_cat:
                             debits_before.add(found_cat)
+            
+            for e in clean_events:
+                if request_date <= e.settlement_date <= next_sal_date_str and e.direction == 'debit':
+                    debits_before.add(e.category)
                                 
-            # For living categories that have no debit scheduled before payday:
+            # For living categories that have no debit scheduled before payday and no detected recurring obligation:
+            rec_cats = set(ob.category for ob in recurring_obs)
             for cat in ['dining', 'transport', 'groceries']:
-                if cat not in debits_before:
+                if cat not in debits_before and cat not in rec_cats:
                     # Find last settled event in this category
                     cat_evs = [e for e in clean_events if e.category == cat and e.event_date <= request_date and e.status == 'settled']
                     if cat_evs:

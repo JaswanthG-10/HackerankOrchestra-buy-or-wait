@@ -100,34 +100,4 @@ def detect_recurring_obligations(
                 event_id=last_ev.event_id
             ))
             
-    # Check if any flexible event (reducible/stoppable) in history is missing from recurring
-    rec_event_ids = set(r.event_id for r in recurring if r.event_id)
-    rec_cats = set(r.category for r in recurring)
-    
-    for cat in sorted(set(e.category for e in history)):
-        cat_evs = sorted([e for e in history if e.category == cat], key=lambda x: x.event_date)
-        last_e = cat_evs[-1]
-        if last_e.flexibility in ['reducible', 'stoppable', 'reducible_or_stoppable']:
-            if last_e.event_id not in rec_event_ids and cat not in rec_cats:
-                dts = [datetime.strptime(e.event_date, "%Y-%m-%d") for e in cat_evs]
-                deltas = [(dts[i] - dts[i-1]).days for i in range(1, len(dts))]
-                med = float(np.median(deltas)) if deltas else 30.0
-                freq = "every_21_days" if 18.0 <= med <= 24.0 else ("biweekly" if 12.0 <= med <= 16.0 else "monthly")
-                dom = dts[-1].day if freq == "monthly" else None
-                dow = dts[-1].weekday() if freq in ["weekly", "biweekly"] else None
-                recurring.append(RecurringObligation(
-                    description=last_e.description,
-                    category=cat,
-                    amount=last_e.amount,
-                    frequency=freq,
-                    day_of_month=dom,
-                    day_of_week=dow,
-                    last_date=last_e.event_date,
-                    flexibility=last_e.flexibility,
-                    minimum_allowed_amount=last_e.minimum_allowed_amount,
-                    event_id=last_e.event_id
-                ))
-                rec_event_ids.add(last_e.event_id)
-                rec_cats.add(cat)
-
     return recurring

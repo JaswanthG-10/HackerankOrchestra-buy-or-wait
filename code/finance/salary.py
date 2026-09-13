@@ -120,11 +120,17 @@ def resolve_salary_plan(
             eff_dt = msg.get("effective_date") or f"{request_date[:7]}-{perm_sal_day:02d}"
             salary_rules.append(SalaryRule(amount=one_time_arrears, start_date=eff_dt, recurring=False, one_time=True, rule_type="arrears"))
 
-    if perm_sal_amount > 0 and not salary_rules:
+    is_gig_worker = any(
+        any(w in e.description.lower() for w in ["gig", "platform payout", "app earnings", "task marketplace", "driver platform", "delivery platform"])
+        for e in settled_sals
+    )
+
+    if perm_sal_amount > 0 and not salary_rules and not is_gig_worker:
         salary_rules.append(SalaryRule(amount=perm_sal_amount, recurring=True, pay_day=perm_sal_day, rule_type="base"))
 
     return {
         "salary_ended": salary_ended,
+        "is_gig_worker": is_gig_worker,
         "base_sal_amount": base_sal_amount,
         "perm_sal_amount": perm_sal_amount,
         "perm_sal_day": perm_sal_day,
