@@ -19,6 +19,7 @@ def create_submission_zip(repo_root: Path = None, output_zip_path: Path = None) 
         'output.csv',
         'sample_output.csv',
         'README.md',
+        'requirements.txt',
         'problem_statement.md',
         'AGENTS.md',
         'package.json'
@@ -57,8 +58,22 @@ def create_submission_zip(repo_root: Path = None, output_zip_path: Path = None) 
             else:
                 print(f'Notice: Root file {fname} not found or skipped.')
 
+    # Verification Gate (Priority 15)
+    with zipfile.ZipFile(output_zip_path, 'r') as check_zip:
+        namelist = check_zip.namelist()
+        required_in_zip = ['code/main.py', 'README.md', 'requirements.txt']
+        forbidden_in_zip = ['.env', '.env.local', 'node_modules', '__pycache__', 'secret']
+        
+        for req in required_in_zip:
+            if req not in namelist:
+                raise ValueError(f"Package validation FAILED: Required file '{req}' missing from zip!")
+                
+        for forb in forbidden_in_zip:
+            if any(forb in name for name in namelist):
+                raise ValueError(f"Package validation FAILED: Forbidden entry containing '{forb}' found in zip!")
+                
     file_size_mb = output_zip_path.stat().st_size / (1024 * 1024)
-    print(f'Successfully packaged {output_zip_path} ({file_size_mb:.2f} MB)')
+    print(f'Successfully packaged and verified {output_zip_path} ({file_size_mb:.2f} MB)')
     return output_zip_path
 
 if __name__ == '__main__':

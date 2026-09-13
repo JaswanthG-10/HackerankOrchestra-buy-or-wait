@@ -165,19 +165,29 @@ def build_forecast_timeline(
         if 0 < days_until_payday <= 20:
             pre_payday_str = (payday_dt - timedelta(days=1)).strftime("%Y-%m-%d")
             
-            # Check debits before payday
+            # Check all debit categories occurring before payday
             debits_before = set()
             for d in range(days_until_payday):
                 d_str = (req_dt + timedelta(days=d)).strftime("%Y-%m-%d")
                 for entry in timeline.get(d_str, []):
                     if entry[1] == 'debit':
+                        # Match category from recurring obligations or clean events
+                        found_cat = None
                         for ob in recurring_obs:
                             if ob.description == entry[2]:
-                                debits_before.add(ob.category)
+                                found_cat = ob.category
+                                break
+                        if not found_cat:
+                            for e in clean_events:
+                                if e.description == entry[2] or f"Pending debit reserve: {e.description}" == entry[2]:
+                                    found_cat = e.category
+                                    break
+                        if found_cat:
+                            debits_before.add(found_cat)
                                 
-            # For living categories that have no debit before payday:
-            for cat in ['dining', 'transport']:
-                if cat not in debits_before and cat in cat_hist_avg:
+            # For living categories that have no debit scheduled before payday:
+            for cat in ['dining', 'transport', 'groceries']:
+                if cat not in debits_before:
                     # Find last settled event in this category
                     cat_evs = [e for e in clean_events if e.category == cat and e.event_date <= request_date and e.status == 'settled']
                     if cat_evs:
