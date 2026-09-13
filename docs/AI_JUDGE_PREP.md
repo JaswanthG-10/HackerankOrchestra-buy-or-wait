@@ -29,7 +29,7 @@ Recurrence is inferred strictly from historical settled transactions using inter
 - Category-level living expense cadences (groceries, transport, dining) are tracked to capture multi-occurrence monthly spending without inventing arbitrary fallback recurrence.
 
 ## 8. How are linked transactions resolved?
-Linked transactions (e.g., `scheduled -> pending -> settled`, authorization hold -> settled purchase, failed -> retry -> settled, refund requests) are collapsed into a single effective obligation using Directed Acyclic Graph (DAG) traversal in `code/finance/lifecycle.py`. Obsolete intermediate or cancelled records are pruned to eliminate double-counting.
+Linked transactions (e.g., `scheduled -> pending -> settled`, authorization hold -> settled purchase, failed -> retry -> settled, refund requests) are collapsed into a single effective obligation using BFS graph connected-component traversal in `code/finance/lifecycle.py`. Obsolete intermediate or cancelled records are pruned to eliminate double-counting.
 
 ## 9. What is amount_safe_to_pay?
 `amount_safe_to_pay` is the maximum cash outlay the user can execute on Day 0 such that their projected available balance remains $\ge \text{minimum\_balance\_to\_keep}$ on every single day over the 90-day simulation window.

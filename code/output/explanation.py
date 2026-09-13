@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 from typing import Optional, List
 from code.models import UserProfile, RequestItem, PlanCandidate, FinancialEvent
 
@@ -71,9 +71,11 @@ def generate_decision_explanation(
                     change_descriptions.append(f'reduce the {desc} to {amt_str}')
             
             changes_str = ' and '.join(change_descriptions)
-            return f'{changes_str}, then pay {req_str} today. This leaves at least {min_bal_str} available.'
+            date_phrase = 'today' if candidate.start_date == request.request_date else f'on {format_date_friendly(candidate.start_date)}'
+            return f'{changes_str}, then pay {req_str} {date_phrase}. This leaves at least {min_bal_str} available.'
         else:
-            return f'Pay {req_str} today. This leaves at least {min_bal_str} available over the next 90 days.'
+            date_phrase = 'today' if candidate.start_date == request.request_date else f'on {format_date_friendly(candidate.start_date)}'
+            return f'Pay {req_str} {date_phrase}. This leaves at least {min_bal_str} available over the next 90 days.'
 
     elif method == 'installments':
         n = candidate.num_payments

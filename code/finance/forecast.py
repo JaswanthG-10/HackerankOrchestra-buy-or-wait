@@ -98,6 +98,24 @@ def build_forecast_timeline(
                 if cur_sal > 0:
                     timeline.setdefault(cur_str, []).append((cur_sal, "credit", "Monthly salary"))
                 first_cycle_done = True
+    elif salary_info.get("is_gig_worker") and not salary_info.get("salary_ended"):
+        gig_credits = [
+            e for e in clean_events 
+            if e.event_date <= request_date and e.status == "settled" and e.direction == "credit"
+            and any(w in e.description.lower() for w in ["gig", "platform payout", "app earnings", "task marketplace", "driver platform", "delivery platform", "payroll", "salary"])
+        ]
+        if len(gig_credits) >= 2:
+            import numpy as np
+            gig_credits.sort(key=lambda x: x.event_date)
+            g_dates = [datetime.strptime(e.event_date, "%Y-%m-%d") for e in gig_credits]
+            g_deltas = [(g_dates[i] - g_dates[i-1]).days for i in range(1, len(g_dates))]
+            g_delta = int(round(float(np.median(g_deltas))))
+            g_amt = float(np.median([e.amount for e in gig_credits[-4:]]))
+            step_dt = g_dates[-1] + timedelta(days=g_delta)
+            while step_dt <= end_dt:
+                if step_dt >= req_dt:
+                    timeline.setdefault(step_dt.strftime("%Y-%m-%d"), []).append((g_amt, "credit", "Gig platform payout"))
+                step_dt += timedelta(days=g_delta)
 
     # 7. Add recurring obligations with variable category budget normalization
     history_debits = [e for e in clean_events if e.event_date <= request_date and e.status == 'settled' and e.direction == 'debit']
@@ -156,14 +174,6 @@ def build_forecast_timeline(
                 days_since = (cur_dt - last_dt).days
                 if days_since > 0 and days_since % 14 == 0:
                     timeline.setdefault(cur_str, []).append((amt, "debit", ob.description))
-        elif ob.frequency == "every_21_days" and ob.last_date:
-            last_dt = datetime.strptime(ob.last_date, "%Y-%m-%d")
-            for d in range(91):
-                cur_dt = req_dt + timedelta(days=d)
-                cur_str = cur_dt.strftime("%Y-%m-%d")
-                days_since = (cur_dt - last_dt).days
-                if days_since > 0 and days_since % 21 == 0:
-                    timeline.setdefault(cur_str, []).append((amt, "debit", ob.description))
 
     # Pre-payday living expenses check:
     # Ensure pre-payday balance accounts for normal active living expenses before first payday
@@ -178,27 +188,29 @@ def build_forecast_timeline(
             for d in range(days_until_payday):
                 d_str = (req_dt + timedelta(days=d)).strftime("%Y-%m-%d")
                 for entry in timeline.get(d_str, []):
-                    if entry[1] == 'debit' and not entry[2].startswith("Pending debit reserve:"):
+                    if entry[1] == 'debit':
+                        desc_clean = entry[2].replace("Pending debit reserve: ", "")
                         found_cat = None
                         for ob in recurring_obs:
-                            if ob.description == entry[2]:
+                            if ob.description == desc_clean or ob.description in desc_clean:
                                 found_cat = ob.category
                                 break
                         if not found_cat:
                             for e in clean_events:
-                                if e.description == entry[2]:
+                                if e.description == desc_clean or e.description in desc_clean:
                                     found_cat = e.category
                                     break
                         if found_cat:
                             debits_before.add(found_cat)
             
             for e in clean_events:
-                if request_date <= e.settlement_date <= next_sal_date_str and e.direction == 'debit' and e.status != 'pending':
+                if request_date <= e.settlement_date <= next_sal_date_str and e.direction == 'debit':
                     debits_before.add(e.category)
                                 
-            # For living categories that have no debit scheduled before payday:
+            # For living categories that have no debit scheduled before payday and no recurring obligation:
+            rec_cats = set(ob.category for ob in recurring_obs)
             for cat in ['dining', 'transport', 'groceries']:
-                if cat not in debits_before:
+                if cat not in debits_before and cat not in rec_cats:
                     cat_evs = [e for e in clean_events if e.category == cat and e.event_date <= request_date and e.status == 'settled']
                     if cat_evs:
                         early_evs = [e for e in cat_evs if datetime.strptime(e.event_date, "%Y-%m-%d").day <= payday_dt.day]

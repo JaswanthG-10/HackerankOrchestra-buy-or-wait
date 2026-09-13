@@ -24,21 +24,35 @@ def validate_dataframe(df: pd.DataFrame, requests_df: pd.DataFrame) -> Tuple[boo
         errors.append(f'Columns mismatch! Expected: {REQUIRED_COLUMNS}, Got: {list(df.columns)}')
         return False, errors
 
-    # 2. Row count
+    # 2. Row count & ID coverage
     if len(df) != len(requests_df):
         errors.append(f'Row count mismatch! Expected {len(requests_df)}, Got {len(df)}')
+
+    expected_ids = set(requests_df['request_id'])
+    actual_ids = set(df['request_id'])
+    if actual_ids != expected_ids:
+        missing = expected_ids - actual_ids
+        extra = actual_ids - expected_ids
+        if missing:
+            errors.append(f'Missing request IDs ({len(missing)}): {list(missing)[:5]}')
+        if extra:
+            errors.append(f'Unknown request IDs ({len(extra)}): {list(extra)[:5]}')
+
+    if len(df['request_id'].unique()) != len(df):
+        errors.append('Duplicate request IDs found in output!')
 
     req_map = requests_df.set_index('request_id').to_dict(orient='index')
 
     for idx, row in df.iterrows():
         rid = row['request_id']
         if rid not in req_map:
-            errors.append(f'Unknown request_id: {rid}')
             continue
             
         r_info = req_map[rid]
         req_amt = float(r_info['requested_amount'])
         req_date = str(r_info['request_date'])
+        req_deadline = str(r_info['desired_completion_date'])
+        allows_partial = bool(r_info.get('allows_partial_payment', True))
         
         # 3. amount_safe_to_pay bounds
         try:
@@ -71,22 +85,47 @@ def validate_dataframe(df: pd.DataFrame, requests_df: pd.DataFrame) -> Tuple[boo
                 plan_val = str(row['payment_plan'])
                 errors.append(f'{rid}: not_affordable requires payment_plan none, got {plan_val}')
 
-        # 6. partial_payment consistency
+        # 6. Payment plan validation
+        plan_str = str(row['payment_plan'])
+        if plan_str != 'none' and plan_str != 'nan':
+            parts = plan_str.split('|')
+            last_date = ''
+            for p in parts:
+                p_tokens = p.split(':')
+                if len(p_tokens) != 2:
+                    errors.append(f'{rid}: malformed plan item format: {p}')
+                    continue
+                p_date, p_amt_str = p_tokens[0], p_tokens[1]
+                if p_date < req_date:
+                    errors.append(f'{rid}: plan date {p_date} before request_date {req_date}')
+                if last_date and p_date < last_date:
+                    errors.append(f'{rid}: plan dates not chronological ({last_date} -> {p_date})')
+                last_date = p_date
+            if last_date and last_date > req_deadline:
+                errors.append(f'{rid}: plan last payment {last_date} exceeds completion deadline {req_deadline}')
+
+        # 7. partial_payment consistency
         if method == 'partial_payment':
+            if not allows_partial:
+                errors.append(f'{rid}: partial_payment recommended when allows_partial_payment is False')
             plan = str(row['payment_plan'])
             parts = plan.split('|')
             if len(parts) != 2:
                 errors.append(f'{rid}: partial_payment requires exactly 2 payments, got {len(parts)}')
             else:
                 try:
-                    p1_amt = float(parts[0].split(':')[1])
-                    p2_amt = float(parts[1].split(':')[1])
+                    p1_date, p1_amt_str = parts[0].split(':')
+                    p2_date, p2_amt_str = parts[1].split(':')
+                    p1_amt = float(p1_amt_str)
+                    p2_amt = float(p2_amt_str)
+                    if p1_date != req_date:
+                        errors.append(f'{rid}: partial payment 1 date {p1_date} != request_date {req_date}')
                     if abs((p1_amt + p2_amt) - req_amt) > 0.05:
                         errors.append(f'{rid}: partial payments sum {p1_amt + p2_amt} != req_amt {req_amt}')
                 except Exception as e:
                     errors.append(f'{rid}: error parsing partial plan {plan}: {e}')
 
-        # 7. spending changes exclusivity
+        # 8. spending changes exclusivity
         changes = str(row['spending_changes_needed'])
         stop_ids = set()
         reduce_map = {}
@@ -111,7 +150,7 @@ def validate_dataframe(df: pd.DataFrame, requests_df: pd.DataFrame) -> Tuple[boo
             if conflict:
                 errors.append(f'{rid}: mutually exclusive violation on {conflict}')
 
-        # 8. Decision explanation non-empty check
+        # 9. Decision explanation non-empty check
         expl = str(row['decision_explanation']) if pd.notnull(row['decision_explanation']) else ''
         if not expl or len(expl.strip()) < 10:
             errors.append(f'{rid}: missing or overly brief decision_explanation')
