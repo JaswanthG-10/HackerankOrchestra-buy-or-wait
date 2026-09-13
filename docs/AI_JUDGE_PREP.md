@@ -13,7 +13,7 @@ AI is NOT used for cash calculations or financial decision logic.
 LLMs are probabilistic engines subject to hallucination, floating-point arithmetic errors, and inconsistent decision boundaries. Financial safety requires 100% deterministic precision. We isolate AI to information extraction, and pass all extracted facts to a deterministic 90-day financial simulator and optimizer.
 
 ## 4. How are images handled?
-Images (receipts, bill statements, bank notices) are processed using `google-genai` multimodal vision. Extracted attributes (`amount`, `settlement_date`, `status`, `direction`, `category`) are validated, normalized, and cached in `dataset/image_cache.json` for instant, 100% reproducible execution.
+Images (receipts, bill statements, bank notices) are processed using `google-genai` multimodal vision. Extracted attributes (`amount`, `settlement_date`, `status`, `direction`, `category`) are validated, normalized, and cached in `code/cache/images.json` for instant, 100% reproducible execution.
 
 ## 5. How are pending credits treated?
 Pending credits (e.g., unconfirmed refunds, pending bonus payouts, unverified freelance invoices) are strictly EXCLUDED from cash flow projections until explicitly settled or confirmed by proof. This prevents overestimating available funds and risking balance breaches.
@@ -56,7 +56,7 @@ Image extraction and message parsing use strict JSON schema enforcement with Pyd
 
 ## 15. How do you guarantee reproducibility?
 - Deterministic 90-day simulation engine.
-- Image extraction facts cached in `dataset/image_cache.json` and message rules in `dataset/message_cache.json`.
+- Image extraction facts cached in `code/cache/images.json` and message rules in `code/cache/messages.json`.
 - Zero runtime LLM variance during decision execution (`python code/main.py --mode sample` runs 100% deterministically in under 3 seconds).
 
 ## 16. What was the hardest technical issue?

@@ -173,13 +173,12 @@ def build_forecast_timeline(
         if 0 < days_until_payday <= 20:
             pre_payday_str = (payday_dt - timedelta(days=1)).strftime("%Y-%m-%d")
             
-            # Check all debit categories occurring before payday
+            # Check all debit categories occurring before payday in current timeline
             debits_before = set()
             for d in range(days_until_payday):
                 d_str = (req_dt + timedelta(days=d)).strftime("%Y-%m-%d")
                 for entry in timeline.get(d_str, []):
                     if entry[1] == 'debit':
-                        # Match category from recurring obligations or clean events
                         found_cat = None
                         for ob in recurring_obs:
                             if ob.description == entry[2]:
@@ -197,14 +196,13 @@ def build_forecast_timeline(
                 if request_date <= e.settlement_date <= next_sal_date_str and e.direction == 'debit':
                     debits_before.add(e.category)
                                 
-            # For living categories that have no debit scheduled before payday and no detected recurring obligation:
-            rec_cats = set(ob.category for ob in recurring_obs)
+            # For living categories that have no debit scheduled before payday:
             for cat in ['dining', 'transport', 'groceries']:
-                if cat not in debits_before and cat not in rec_cats:
-                    # Find last settled event in this category
+                if cat not in debits_before:
                     cat_evs = [e for e in clean_events if e.category == cat and e.event_date <= request_date and e.status == 'settled']
                     if cat_evs:
-                        last_e = cat_evs[-1]
+                        early_evs = [e for e in cat_evs if datetime.strptime(e.event_date, "%Y-%m-%d").day <= payday_dt.day]
+                        last_e = early_evs[-1] if early_evs else cat_evs[-1]
                         amt = last_e.amount
                         if last_e.event_id in stop_event_ids:
                             continue

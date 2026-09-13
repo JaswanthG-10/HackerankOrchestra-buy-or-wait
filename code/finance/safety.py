@@ -53,7 +53,8 @@ def compute_earliest_date_for_full_payment(
             payment_schedule=[(test_date_str, requested_amount)]
         )
 
-        if test_headroom >= -0.05:
+        min_headroom_threshold = max(0.0, 0.10 * profile.minimum_balance_to_keep)
+        if test_headroom >= min_headroom_threshold:
             return test_date_str
 
     return None

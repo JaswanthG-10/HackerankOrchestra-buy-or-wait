@@ -1,4 +1,4 @@
-﻿import re
+import re
 from pathlib import Path
 from typing import List, Tuple
 import pandas as pd
@@ -88,7 +88,9 @@ def validate_dataframe(df: pd.DataFrame, requests_df: pd.DataFrame) -> Tuple[boo
 
         # 7. spending changes exclusivity
         changes = str(row['spending_changes_needed'])
-        if changes != 'none' and pd.notnull(row['spending_changes_needed']):
+        stop_ids = set()
+        reduce_map = {}
+        if changes != 'none' and pd.notnull(row['spending_changes_needed']) and changes != 'nan':
             c_parts = changes.split('|')
             if len(c_parts) > 3:
                 errors.append(f'{rid}: too many spending changes ({len(c_parts)})')
@@ -96,11 +98,22 @@ def validate_dataframe(df: pd.DataFrame, requests_df: pd.DataFrame) -> Tuple[boo
             reduced = set()
             for c in c_parts:
                 if c.startswith('stop:'):
-                    stopped.add(c.split(':')[1])
+                    ev_id = c.split(':')[1]
+                    stopped.add(ev_id)
+                    stop_ids.add(ev_id)
                 elif c.startswith('reduce_to:'):
-                    reduced.add(c.split(':')[1])
+                    parts = c.split(':')
+                    ev_id = parts[1]
+                    amt_val = float(parts[2])
+                    reduced.add(ev_id)
+                    reduce_map[ev_id] = amt_val
             conflict = stopped.intersection(reduced)
             if conflict:
                 errors.append(f'{rid}: mutually exclusive violation on {conflict}')
+
+        # 8. Decision explanation non-empty check
+        expl = str(row['decision_explanation']) if pd.notnull(row['decision_explanation']) else ''
+        if not expl or len(expl.strip()) < 10:
+            errors.append(f'{rid}: missing or overly brief decision_explanation')
 
     return len(errors) == 0, errors
